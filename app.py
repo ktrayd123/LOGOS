@@ -37,7 +37,7 @@ def preprocess(df):
         "from_location": df["а"].astype(str).apply(clean_location),
         "to_location": df["Куда"].astype(str).apply(clean_location),
         "phone": df["Контакты"].astype(str).apply(clean_phone),
-        "carrier_name": df["Наименование"].astype(str).apply(clean_location)
+        "er_name": df["Наименование"].astype(str).apply(clean_location)
     })
     clean["type_ts"] = ""
     clean["color"] = "white"
@@ -65,7 +65,7 @@ def save_data(df):
 # Автоматическая загрузка из файла в репозитории, если нет сохранённых данных
 global_df = load_data()
 if global_df is None:
-    default_file = os.path.join("data", "carriers_data.xlsx")
+    default_file = os.path.join("data", "carriers_data (3).csv")
     if os.path.exists(default_file):
         try:
             raw = pd.read_excel(default_file, engine='openpyxl', dtype=str)
