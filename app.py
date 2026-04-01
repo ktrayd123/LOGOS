@@ -187,7 +187,19 @@ def display_table(from_val, to_val):
     State("carrier-grid", "rowData"),
 )
 def save_changes(n_clicks, row_data):
-    global global_df
+   global_df = load_data()
+
+if global_df is None:
+    default_file = os.path.join("data", "carriers_data.xlsx")
+    if os.path.exists(default_file):
+        try:
+            raw = pd.read_excel(default_file, engine='openpyxl', dtype=str)
+            clean = preprocess(raw)
+            if not clean.empty:
+                global_df = clean
+                save_data(global_df)
+        except Exception as e:
+            print(f"Ошибка загрузки файла по умолчанию: {e}")
     if n_clicks == 0 or row_data is None:
         return ""
     edited_df = pd.DataFrame(row_data)
