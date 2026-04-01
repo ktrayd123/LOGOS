@@ -33,6 +33,7 @@ def clean_location(loc):
 
 def preprocess(df):
     # Укажите точные названия колонок из вашего файла
+    # Если колонки называются иначе, измените здесь
     clean = pd.DataFrame({
         "from_location": df["а"].astype(str).apply(clean_location),
         "to_location": df["Куда"].astype(str).apply(clean_location),
@@ -62,8 +63,22 @@ def load_data():
 def save_data(df):
     df.to_excel(CLEAN_FILE, index=False, engine='openpyxl')
 
-# Глобальная переменная
+# Попытка загрузить сохранённые данные
 global_df = load_data()
+
+# Если данных нет, пытаемся загрузить файл по умолчанию из папки data
+if global_df is None:
+    default_file = os.path.join("data", "carriers_data.xlsx")
+    if os.path.exists(default_file):
+        try:
+            raw = pd.read_excel(default_file, engine='openpyxl', dtype=str)
+            clean = preprocess(raw)
+            if not clean.empty:
+                global_df = clean
+                save_data(global_df)
+                print(f"Автоматически загружен файл {default_file}, записей: {len(clean)}")
+        except Exception as e:
+            print(f"Ошибка загрузки файла по умолчанию: {e}")
 
 app = dash.Dash(__name__, suppress_callback_exceptions=True)
 server = app.server
@@ -146,7 +161,7 @@ def display_table(from_val, to_val):
     filtered = update_table_data(global_df, from_val, to_val)
     if filtered is None or filtered.empty:
         return html.Div("Нет данных")
-    filtered = filtered.fillna("")  # заменяем NaN для корректного отображения
+    filtered = filtered.fillna("")
     column_defs = [
         {"field": "from_location", "headerName": "Откуда", "editable": False},
         {"field": "to_location", "headerName": "Куда", "editable": False},
@@ -187,19 +202,7 @@ def display_table(from_val, to_val):
     State("carrier-grid", "rowData"),
 )
 def save_changes(n_clicks, row_data):
-   global_df = load_data()
-
-if global_df is None:
-    default_file = os.path.join("data", "carriers_data.xlsx")
-    if os.path.exists(default_file):
-        try:
-            raw = pd.read_excel(default_file, engine='openpyxl', dtype=str)
-            clean = preprocess(raw)
-            if not clean.empty:
-                global_df = clean
-                save_data(global_df)
-        except Exception as e:
-            print(f"Ошибка загрузки файла по умолчанию: {e}")
+    global global_df
     if n_clicks == 0 or row_data is None:
         return ""
     edited_df = pd.DataFrame(row_data)
@@ -214,4 +217,6 @@ if global_df is None:
     return html.Div("✅ Изменения сохранены!", style={"color": "green"})
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=8050)
+    import os
+    port = int(os.environ.get("PORT", 8050))
+    app.run(debug=False, host="0.0.0.0", port=port)
