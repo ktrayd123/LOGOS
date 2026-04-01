@@ -32,8 +32,7 @@ def clean_location(loc):
     return re.sub(r'\s+', ' ', s)
 
 def preprocess(df):
-    # Укажите точные названия колонок из вашего файла
-    # Если колонки называются иначе, измените здесь
+    # Если в вашем файле колонки называются иначе, измените здесь
     clean = pd.DataFrame({
         "from_location": df["а"].astype(str).apply(clean_location),
         "to_location": df["Куда"].astype(str).apply(clean_location),
@@ -63,10 +62,8 @@ def load_data():
 def save_data(df):
     df.to_excel(CLEAN_FILE, index=False, engine='openpyxl')
 
-# Попытка загрузить сохранённые данные
+# Автоматическая загрузка из файла в репозитории, если нет сохранённых данных
 global_df = load_data()
-
-# Если данных нет, пытаемся загрузить файл по умолчанию из папки data
 if global_df is None:
     default_file = os.path.join("data", "carriers_data.xlsx")
     if os.path.exists(default_file):
@@ -76,7 +73,6 @@ if global_df is None:
             if not clean.empty:
                 global_df = clean
                 save_data(global_df)
-                print(f"Автоматически загружен файл {default_file}, записей: {len(clean)}")
         except Exception as e:
             print(f"Ошибка загрузки файла по умолчанию: {e}")
 
@@ -85,7 +81,6 @@ server = app.server
 
 app.layout = html.Div([
     html.H1("📦 Поиск перевозчика по маршруту", style={"textAlign": "center"}),
-
     dcc.Upload(
         id="upload-data",
         children=html.Div(["📂 Перетащите файл или ", html.A("выберите файл")]),
@@ -97,7 +92,6 @@ app.layout = html.Div([
         multiple=False
     ),
     html.Div(id="upload-output"),
-
     html.Div([
         html.Div([
             html.Label("Откуда"),
@@ -108,7 +102,6 @@ app.layout = html.Div([
             dcc.Input(id="to-input", type="text", debounce=True, style={"width": "100%"}),
         ], style={"width": "48%", "float": "right", "display": "inline-block"}),
     ], style={"margin": "20px 0"}),
-
     html.Div(id="table-container"),
     html.Button("💾 Сохранить изменения", id="save-button", n_clicks=0, style={"margin": "20px"}),
     html.Div(id="save-message")
