@@ -6,9 +6,11 @@ import os
 import re
 import base64
 import io
+import sys
 
+# Настройки
 DATA_DIR = "data"
-CLEAN_FILE = os.path.join(DATA_DIR, "carriers_clean.csv")
+CLEAN_FILE = os.path.join(DATA_DIR, "carriers_clean.csv")   # можно .xlsx, но лучше .csv
 os.makedirs(DATA_DIR, exist_ok=True)
 
 def clean_phone(phone):
@@ -32,24 +34,31 @@ def clean_location(loc):
     return re.sub(r'\s+', ' ', s)
 
 def preprocess(df):
-    # Если в вашем файле колонки называются иначе, измените здесь
+    # Выведем колонки для отладки
+    print("Колонки в загруженном файле:", list(df.columns))
+    # Приводим названия к стандартным (замените на реальные названия, если нужно)
     clean = pd.DataFrame({
         "from_location": df["а"].astype(str).apply(clean_location),
         "to_location": df["Куда"].astype(str).apply(clean_location),
         "phone": df["Контакты"].astype(str).apply(clean_phone),
-        "er_name": df["Наименование"].astype(str).apply(clean_location)
+        "carrier_name": df["Наименование"].astype(str).apply(clean_location)
     })
     clean["type_ts"] = ""
     clean["color"] = "white"
     clean["votes"] = 0
     clean["id"] = range(len(clean))
+    # Удаляем строки с пустыми обязательными полями
     clean = clean[(clean["from_location"] != "") & (clean["to_location"] != "") & (clean["phone"] != "")].reset_index(drop=True)
     clean["id"] = range(len(clean))
     return clean
 
 def load_data():
     if os.path.exists(CLEAN_FILE):
-        df = pd.read_excel(CLEAN_FILE, engine='openpyxl')
+        # Определяем по расширению, как читать
+        if CLEAN_FILE.endswith('.csv'):
+            df = pd.read_csv(CLEAN_FILE, dtype=str)
+        else:
+            df = pd.read_excel(CLEAN_FILE, engine='openpyxl', dtype=str)
         for col in ["type_ts", "color", "votes", "id"]:
             if col not in df.columns:
                 if col == "id":
@@ -60,21 +69,39 @@ def load_data():
     return None
 
 def save_data(df):
-    df.to_excel(CLEAN_FILE, index=False, engine='openpyxl')
+    # Сохраняем в том же формате, что и файл по умолчанию
+    if CLEAN_FILE.endswith('.csv'):
+        df.to_csv(CLEAN_FILE, index=False)
+    else:
+        df.to_excel(CLEAN_FILE, index=False, engine='openpyxl')
 
-# Автоматическая загрузка из файла в репозитории, если нет сохранённых данных
+# Автоматическая загрузка из файла по умолчанию
 global_df = load_data()
 if global_df is None:
-    default_file = os.path.join("data", "carriers_data.csv")
+    # Ищем файл по умолчанию: сначала CSV, потом Excel
+    default_file = os.path.join(DATA_DIR, "carriers_data.csv")
+    if not os.path.exists(default_file):
+        default_file = os.path.join(DATA_DIR, "carriers_data.xlsx")
+    print(f"=== Проверка файла по умолчанию: {default_file} ===")
     if os.path.exists(default_file):
+        print(f"Файл найден, размер: {os.path.getsize(default_file)} байт")
         try:
-            raw = pd.read_excel(default_file, engine='openpyxl', dtype=str)
+            if default_file.endswith('.csv'):
+                raw = pd.read_csv(default_file, dtype=str)
+            else:
+                raw = pd.read_excel(default_file, engine='openpyxl', dtype=str)
+            print(f"Файл прочитан, строк: {len(raw)}")
             clean = preprocess(raw)
             if not clean.empty:
                 global_df = clean
                 save_data(global_df)
+                print(f"✅ Загружено {len(clean)} записей")
+            else:
+                print("❌ После очистки нет записей")
         except Exception as e:
-            print(f"Ошибка загрузки файла по умолчанию: {e}")
+            print(f"❌ Ошибка загрузки файла по умолчанию: {e}")
+    else:
+        print(f"Файл {default_file} не найден")
 
 app = dash.Dash(__name__, suppress_callback_exceptions=True)
 server = app.server
@@ -210,6 +237,5 @@ def save_changes(n_clicks, row_data):
     return html.Div("✅ Изменения сохранены!", style={"color": "green"})
 
 if __name__ == "__main__":
-    import os
     port = int(os.environ.get("PORT", 8050))
     app.run(debug=False, host="0.0.0.0", port=port)
