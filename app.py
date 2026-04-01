@@ -66,6 +66,7 @@ def save_data(df):
 global_df = load_data()
 
 app = dash.Dash(__name__, suppress_callback_exceptions=True)
+server = app.server
 
 app.layout = html.Div([
     html.H1("📦 Поиск перевозчика по маршруту", style={"textAlign": "center"}),
