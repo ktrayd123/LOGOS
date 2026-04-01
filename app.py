@@ -8,7 +8,7 @@ import base64
 import io
 
 DATA_DIR = "data"
-CLEAN_FILE = os.path.join(DATA_DIR, "carriers_clean.xlsx")
+CLEAN_FILE = os.path.join(DATA_DIR, "carriers_clean.csv")
 os.makedirs(DATA_DIR, exist_ok=True)
 
 def clean_phone(phone):
