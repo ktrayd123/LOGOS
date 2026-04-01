@@ -65,7 +65,7 @@ def save_data(df):
 # Автоматическая загрузка из файла в репозитории, если нет сохранённых данных
 global_df = load_data()
 if global_df is None:
-    default_file = os.path.join("data", "carriers_data.xls")
+    default_file = os.path.join("data", "carriers_data.csv")
     if os.path.exists(default_file):
         try:
             raw = pd.read_excel(default_file, engine='openpyxl', dtype=str)
