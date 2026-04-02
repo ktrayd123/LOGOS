@@ -3,3 +3,6 @@ dash-ag-grid
 pandas
 openpyxl
 gunicorn
+gspread
+google-auth
+oauth2client
