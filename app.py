@@ -6,11 +6,73 @@ import os
 import re
 import base64
 import io
-import sys
+import json
+import gspread
+from google.oauth2.service_account import Credentials
 
-# Настройки
+# ======================= НАСТРОЙКИ GOOGLE SHEETS =======================
+# Замените на ID вашей таблицы (из URL)
+SHEET_ID = "1A2B3C4D5E6F7G8H9I0J"   # <-- ВСТАВЬТЕ СВОЙ ID
+
+# Переменная окружения на Render (содержит JSON-ключ)
+CRED_JSON = os.environ.get("GOOGLE_CREDENTIALS_JSON")
+
+def get_worksheet():
+    """Подключается к Google Sheets и возвращает первый лист."""
+    if not CRED_JSON:
+        raise Exception("Переменная окружения GOOGLE_CREDENTIALS_JSON не задана")
+    cred_dict = json.loads(CRED_JSON)
+    scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+    creds = Credentials.from_service_account_info(cred_dict, scopes=scopes)
+    client = gspread.authorize(creds)
+    sheet = client.open_by_key(SHEET_ID)
+    return sheet.get_worksheet(0)
+
+def load_data_from_gsheet():
+    """Загружает данные из Google Sheets в DataFrame."""
+    try:
+        ws = get_worksheet()
+        records = ws.get_all_records()
+        if not records:
+            return None
+        df = pd.DataFrame(records)
+        # Все данные из Sheets приходят как строки, оставляем как есть
+        df = df.astype(str)
+        # Добавляем недостающие колонки (если их нет)
+        for col in ["type_ts", "color", "votes", "id"]:
+            if col not in df.columns:
+                if col == "id":
+                    df[col] = range(len(df))
+                else:
+                    df[col] = 0 if col == "votes" else ("white" if col == "color" else "")
+        if "id" not in df.columns:
+            df["id"] = range(len(df))
+        # Преобразуем голоса в числа
+        df["votes"] = pd.to_numeric(df["votes"], errors="coerce").fillna(0).astype(int)
+        return df
+    except Exception as e:
+        print(f"Ошибка загрузки из Google Sheets: {e}")
+        return None
+
+def save_data_to_gsheet(df):
+    """Сохраняет DataFrame в Google Sheets (полная замена данных)."""
+    try:
+        ws = get_worksheet()
+        ws.clear()
+        if df.empty:
+            return
+        # Заменяем NaN на пустые строки
+        df = df.fillna("")
+        # Подготавливаем данные: сначала заголовки, потом строки
+        data = [df.columns.tolist()] + df.values.tolist()
+        ws.update(data, value_input_option="USER_ENTERED")
+        print(f"Сохранено {len(df)} записей в Google Sheets")
+    except Exception as e:
+        print(f"Ошибка сохранения в Google Sheets: {e}")
+
+# ======================= ОСТАЛЬНОЙ КОД (БЕЗ ИЗМЕНЕНИЙ) =======================
 DATA_DIR = "data"
-CLEAN_FILE = os.path.join(DATA_DIR, "carriers_clean.csv")   # можно .xlsx, но лучше .csv
+CLEAN_FILE = os.path.join(DATA_DIR, "carriers_clean.csv")
 os.makedirs(DATA_DIR, exist_ok=True)
 
 def clean_phone(phone):
@@ -34,9 +96,7 @@ def clean_location(loc):
     return re.sub(r'\s+', ' ', s)
 
 def preprocess(df):
-    # Выведем колонки для отладки
     print("Колонки в загруженном файле:", list(df.columns))
-    # Приводим названия к стандартным (замените на реальные названия, если нужно)
     clean = pd.DataFrame({
         "from_location": df["Откуда"].astype(str).apply(clean_location),
         "to_location": df["Куда"].astype(str).apply(clean_location),
@@ -47,38 +107,17 @@ def preprocess(df):
     clean["color"] = "white"
     clean["votes"] = 0
     clean["id"] = range(len(clean))
-    # Удаляем строки с пустыми обязательными полями
     clean = clean[(clean["from_location"] != "") & (clean["to_location"] != "") & (clean["phone"] != "")].reset_index(drop=True)
     clean["id"] = range(len(clean))
     return clean
 
-def load_data():
-    if os.path.exists(CLEAN_FILE):
-        # Определяем по расширению, как читать
-        if CLEAN_FILE.endswith('.csv'):
-            df = pd.read_csv(CLEAN_FILE, dtype=str)
-        else:
-            df = pd.read_excel(CLEAN_FILE, engine='openpyxl', dtype=str)
-        for col in ["type_ts", "color", "votes", "id"]:
-            if col not in df.columns:
-                if col == "id":
-                    df[col] = range(len(df))
-                else:
-                    df[col] = 0 if col == "votes" else ("white" if col == "color" else "")
-        return df
-    return None
+# -------------------------------
+# Загрузка глобальных данных (теперь из Google Sheets)
+# -------------------------------
+global_df = load_data_from_gsheet()
 
-def save_data(df):
-    # Сохраняем в том же формате, что и файл по умолчанию
-    if CLEAN_FILE.endswith('.csv'):
-        df.to_csv(CLEAN_FILE, index=False)
-    else:
-        df.to_excel(CLEAN_FILE, index=False, engine='openpyxl')
-
-# Автоматическая загрузка из файла по умолчанию
-global_df = load_data()
-if global_df is None:
-    # Ищем файл по умолчанию: сначала CSV, потом Excel
+# Если в Google Sheets нет данных, пробуем загрузить из файла по умолчанию и сохранить в Sheets
+if global_df is None or global_df.empty:
     default_file = os.path.join(DATA_DIR, "carriers_data.csv")
     if not os.path.exists(default_file):
         default_file = os.path.join(DATA_DIR, "carriers_data.xlsx")
@@ -94,15 +133,17 @@ if global_df is None:
             clean = preprocess(raw)
             if not clean.empty:
                 global_df = clean
-                save_data(global_df)
-                print(f"✅ Загружено {len(clean)} записей")
+                save_data_to_gsheet(global_df)
+                print(f"✅ Загружено {len(clean)} записей из файла и сохранено в Google Sheets")
             else:
                 print("❌ После очистки нет записей")
         except Exception as e:
             print(f"❌ Ошибка загрузки файла по умолчанию: {e}")
     else:
-        print(f"Файл {default_file} не найден")
+        print(f"Файл {default_file} не найден, создаём пустой DataFrame")
+        global_df = pd.DataFrame(columns=["from_location","to_location","phone","carrier_name","type_ts","color","votes","id"])
 
+# ======================= DASH APP (БЕЗ ИЗМЕНЕНИЙ) =======================
 app = dash.Dash(__name__, suppress_callback_exceptions=True)
 server = app.server
 
@@ -166,7 +207,7 @@ def handle_upload(contents, filename):
         if clean.empty:
             return html.Div("Ошибка: не удалось извлечь данные. Проверьте колонки.")
         global_df = clean
-        save_data(global_df)
+        save_data_to_gsheet(global_df)
         return html.Div(f"✅ Загружено {len(clean)} записей")
     except Exception as e:
         return html.Div(f"❌ Ошибка: {e}")
@@ -233,8 +274,8 @@ def save_changes(n_clicks, row_data):
             for col in ["phone", "carrier_name", "type_ts", "color", "votes"]:
                 if col in row:
                     global_df.loc[orig_idx[0], col] = row[col]
-    save_data(global_df)
-    return html.Div("✅ Изменения сохранены!", style={"color": "green"})
+    save_data_to_gsheet(global_df)
+    return html.Div("✅ Изменения сохранены в Google Sheets!", style={"color": "green"})
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))
