@@ -38,7 +38,7 @@ def preprocess(df):
     print("Колонки в загруженном файле:", list(df.columns))
     # Приводим названия к стандартным (замените на реальные названия, если нужно)
     clean = pd.DataFrame({
-        "from_location": df["а"].astype(str).apply(clean_location),
+        "from_location": df["откуда"].astype(str).apply(clean_location),
         "to_location": df["Куда"].astype(str).apply(clean_location),
         "phone": df["Контакты"].astype(str).apply(clean_phone),
         "carrier_name": df["Наименование"].astype(str).apply(clean_location)
