@@ -12,7 +12,7 @@ from google.oauth2.service_account import Credentials
 
 # ======================= НАСТРОЙКИ GOOGLE SHEETS =======================
 # Замените на ID вашей таблицы (из URL)
-SHEET_ID = "1A2B3C4D5E6F7G8H9I0J"   # <-- ВСТАВЬТЕ СВОЙ ID
+SHEET_ID = "1sB7h5QPO1XV2liqZAF8weMPhdHJApxUJBHVde_wzU4o"   # <-- ВСТАВЬТЕ СВОЙ ID
 
 # Переменная окружения на Render (содержит JSON-ключ)
 CRED_JSON = os.environ.get("GOOGLE_CREDENTIALS_JSON")
